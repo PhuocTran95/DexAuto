@@ -1,0 +1,123 @@
+<resources>
+    <string name="app_name">DexAuto</string>
+
+    <string name="permission_intro">Yêu cầu các quyền cần thiết trước khi chạy panel trên DeX.</string>
+    <string name="permission_overlay_title">Hiển thị trên ứng dụng khác</string>
+    <string name="permission_overlay_granted">Đã bật. Panel có thể hiển thị trên ứng dụng khác.</string>
+    <string name="permission_overlay_denied">Bắt buộc. Android không hiện popup cho quyền này, cần bật thủ công.</string>
+    <string name="permission_open_settings">Mở Settings</string>
+    <string name="permission_notification_title">Thông báo</string>
+    <string name="permission_notification_granted">Đã bật. Foreground service có thể hiện trạng thái panel.</string>
+    <string name="permission_notification_denied">Khuyến nghị để dễ kiểm tra trạng thái panel. Nếu không hiện popup, hãy bật trong App notification settings.</string>
+    <string name="permission_request">Yêu cầu</string>
+    <string name="permission_battery_title">Không tối ưu pin</string>
+    <string name="permission_battery_granted">Đã bật. Panel ít bị hệ thống dừng nền hơn.</string>
+    <string name="permission_battery_denied">Khuyến nghị nếu muốn panel chạy lâu trong DeX.</string>
+    <string name="permission_show_panel">Hiển thị panel</string>
+    <string name="permission_hide_panel">Tắt panel</string>
+    <string name="permission_overlay_required">Panel chỉ hiển thị sau khi quyền overlay đã bật.</string>
+    <string name="author">Phuoc Tran - nguyenbaphuoctran@gmail.com</string>
+    <string name="permission_ok">OK</string>
+
+    <string name="toast_panel_stop_requested">Đã gửi lệnh đóng DexAuto panel</string>
+    <string name="toast_overlay_permission_required">DexAuto cần quyền hiển thị trên ứng dụng khác.</string>
+    <string name="toast_no_dex_display">Không tìm thấy màn hình DeX/external.</string>
+    <string name="toast_overlay_create_failed">Không thể tạo overlay. Hãy kiểm tra quyền hiển thị trên ứng dụng khác.</string>
+    <string name="toast_overlay_security_failed">DexAuto chưa có quyền tạo overlay.</string>
+    <string name="toast_popup_create_failed">Không thể tạo popup overlay.</string>
+    <string name="toast_launch_app_failed">Không mở được %1$s</string>
+    <string name="toast_battery_set_success">Đã set pin %1$d%%</string>
+    <string name="toast_battery_set_failed">Không set được pin. Hãy chọn Root/Shizuku và cấp quyền tương ứng.</string>
+    <string name="toast_root_requesting">Đang yêu cầu quyền Root…</string>
+    <string name="toast_root_enabled">Đã bật Root cho DexAuto.</string>
+    <string name="toast_root_denied">Root chưa được cấp trong Magisk, đã tắt toggle Root.</string>
+    <string name="toast_shizuku_permission_required">Hãy cấp quyền Shizuku rồi bật lại toggle Shizuku.</string>
+    <string name="toast_layout_incomplete">Vui lòng chọn đủ ứng dụng cho layout</string>
+    <string name="toast_preserve_layout_backend_required">Không có quyền Root hoặc Shizuku. Tùy chọn giữ layout đã được tắt.</string>
+
+    <string name="notification_panel_title">DexAuto panel</string>
+    <string name="notification_panel_waiting">Đang chờ màn hình DeX sẵn sàng…</string>
+    <string name="notification_panel_text">Panel đang chạy trên màn hình.</string>
+    <string name="notification_channel_panel">DexAuto panel</string>
+
+    <string name="content_desc_power_panel">Tắt panel</string>
+    <string name="content_desc_settings">Settings</string>
+    <string name="content_desc_rest_screen">Màn hình nghỉ ngơi</string>
+    <string name="content_desc_payment_qr">Mã QR chuyển khoản</string>
+    <string name="content_desc_open_payment_qr">Mở QR chuyển khoản</string>
+    <string name="content_desc_close_payment_qr">Đóng QR chuyển khoản</string>
+    <string name="rest_screen_dismiss_hint">Chạm 2 lần để tắt màn hình nghỉ ngơi</string>
+    <string name="content_desc_collapse_panel">Thu panel</string>
+    <string name="content_desc_expand_panel">Mở panel</string>
+    <string name="content_desc_add_layout">Thêm layout</string>
+    <string name="content_desc_close_add_layout">Đóng thêm layout</string>
+    <string name="content_desc_delete_layout">Xóa layout</string>
+    <string name="content_desc_scroll_left">Cuộn trái</string>
+    <string name="content_desc_scroll_right">Cuộn phải</string>
+    <string name="content_desc_scroll_up">Cuộn lên</string>
+    <string name="content_desc_scroll_down">Cuộn xuống</string>
+    <string name="content_desc_choose_app">Chọn app</string>
+    <string name="content_desc_back">Quay lại</string>
+    <string name="content_desc_layout">Layout</string>
+
+    <string name="settings_header_system">Hệ thống</string>
+    <string name="settings_panel_position">Vị trí panel:</string>
+    <string name="settings_config">Cài đặt:</string>
+    <string name="settings_fixed_pin">Fixed pin 100%</string>
+    <string name="settings_root">Root</string>
+    <string name="settings_shizuku">Shizuku</string>
+    <string name="settings_preserve_dex_layout">Giữ layout khi mở DeX (Root/Shizuku)</string>
+
+    <string name="layout_popup_choose_layout">Chọn layout</string>
+    <string name="layout_popup_choose_app">Chọn app</string>
+    <string name="layout_popup_apps">Ứng dụng</string>
+    <string name="layout_popup_search_hint">Tìm</string>
+    <string name="layout_popup_save">Lưu layout</string>
+    <string name="payment_qr_title">QR chuyển khoản</string>
+    <string name="payment_qr_bank">Ngân hàng</string>
+    <string name="payment_qr_account_number">Số tài khoản</string>
+    <string name="payment_qr_update">Cập nhật</string>
+    <string name="payment_qr_empty">Chọn ngân hàng và nhập số tài khoản</string>
+    <string name="payment_qr_load_error">Không tải được mã QR</string>
+    <string name="payment_qr_update_error">Cập nhật thất bại, đang giữ mã QR cũ</string>
+    <string name="panel_position_left">Trái</string>
+    <string name="panel_position_right">Phải</string>
+    <string name="panel_position_top">Trên</string>
+    <string name="panel_position_bottom">Dưới</string>
+
+    <string name="date_leap_suffix"> nhuận</string>
+    <string name="weekday_monday">Thứ hai</string>
+    <string name="weekday_tuesday">Thứ ba</string>
+    <string name="weekday_wednesday">Thứ tư</string>
+    <string name="weekday_thursday">Thứ năm</string>
+    <string name="weekday_friday">Thứ sáu</string>
+    <string name="weekday_saturday">Thứ bảy</string>
+    <string name="weekday_sunday">Chủ nhật</string>
+
+    <string-array name="lunar_can_names">
+        <item>Giáp</item>
+        <item>Ất</item>
+        <item>Bính</item>
+        <item>Đinh</item>
+        <item>Mậu</item>
+        <item>Kỷ</item>
+        <item>Canh</item>
+        <item>Tân</item>
+        <item>Nhâm</item>
+        <item>Quý</item>
+    </string-array>
+    <string-array name="lunar_chi_names">
+        <item>Tý</item>
+        <item>Sửu</item>
+        <item>Dần</item>
+        <item>Mão</item>
+        <item>Thìn</item>
+        <item>Tỵ</item>
+        <item>Ngọ</item>
+        <item>Mùi</item>
+        <item>Thân</item>
+        <item>Dậu</item>
+        <item>Tuất</item>
+        <item>Hợi</item>
+    </string-array>
+</resources>
