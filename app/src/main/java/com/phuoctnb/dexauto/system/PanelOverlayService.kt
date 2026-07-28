@@ -66,6 +66,7 @@ class PanelOverlayService : LifecycleService(), SavedStateRegistryOwner {
     private var panelView: ComposeView? = null
     private var popupView: ComposeView? = null
     private var restScreenView: ComposeView? = null
+    private var popupInputFocused = false
     private var currentDisplayId: Int? = null
     private var panelTransitionRunnable: Runnable? = null
     private var privilegedBackendRequestId = 0
@@ -73,6 +74,7 @@ class PanelOverlayService : LifecycleService(), SavedStateRegistryOwner {
     private var preserveLayoutRequestId = 0
     private var autoStartRetryRunnable: Runnable? = null
     private var panelDrawTimeoutRunnable: Runnable? = null
+    private var startupBatteryFixRunnable: Runnable? = null
     private var sessionRestoreRunnable: Runnable? = null
     private var layoutRefreshRunnable: Runnable? = null
     private var layoutRefreshAttempt = 0
@@ -137,7 +139,6 @@ class PanelOverlayService : LifecycleService(), SavedStateRegistryOwner {
         restoreShizukuBackendIfAvailable()
         enforceBackendDependentSettings()
         validatePreserveLayoutBackendOnStartup()
-        applyBatteryFixOnStartupIfNeeded()
         startPanelForeground()
     }
 
@@ -187,6 +188,8 @@ class PanelOverlayService : LifecycleService(), SavedStateRegistryOwner {
         autoStartRetryRunnable = null
         panelDrawTimeoutRunnable?.let { handler.removeCallbacks(it) }
         panelDrawTimeoutRunnable = null
+        startupBatteryFixRunnable?.let { handler.removeCallbacks(it) }
+        startupBatteryFixRunnable = null
         sessionRestoreRunnable?.let { handler.removeCallbacks(it) }
         sessionRestoreRunnable = null
         layoutRefreshRunnable?.let { handler.removeCallbacks(it) }
@@ -201,6 +204,7 @@ class PanelOverlayService : LifecycleService(), SavedStateRegistryOwner {
         }
         panelView = null
         popupView = null
+        popupInputFocused = false
         setPanelRunning(false)
         PanelOverlayBounds.bounds = null
         PanelOverlayBounds.displayId = null
@@ -297,6 +301,7 @@ class PanelOverlayService : LifecycleService(), SavedStateRegistryOwner {
         popupView?.let { runCatching { windowManager.removeView(it) } }
         panelView = null
         popupView = null
+        popupInputFocused = false
         currentDisplayId = targetDisplay.displayId
         overlayContext = createDisplayContext(targetDisplay)
         overlayDensity = overlayContext.resources.displayMetrics.density
@@ -316,6 +321,7 @@ class PanelOverlayService : LifecycleService(), SavedStateRegistryOwner {
                     DexAutoScreen(
                         state = state,
                         onOpenSettings = {
+                            popupInputFocused = false
                             state = state.copy(
                                 showSettings = true,
                                 showLayoutPopup = false,
@@ -667,6 +673,7 @@ class PanelOverlayService : LifecycleService(), SavedStateRegistryOwner {
     }
 
     private fun setLayoutPopupVisible(visible: Boolean) {
+        popupInputFocused = false
         state = if (visible) {
             state.copy(showLayoutPopup = true, showPaymentPopup = false)
         } else {
@@ -682,6 +689,7 @@ class PanelOverlayService : LifecycleService(), SavedStateRegistryOwner {
     }
 
     private fun setPaymentPopupVisible(visible: Boolean) {
+        popupInputFocused = false
         state = if (visible) {
             state.copy(
                 showPaymentPopup = true,
@@ -900,6 +908,7 @@ class PanelOverlayService : LifecycleService(), SavedStateRegistryOwner {
         if ((!state.showLayoutPopup && !state.showPaymentPopup) || state.showSettings) {
             popupView?.let { runCatching { windowManager.removeView(it) } }
             popupView = null
+            popupInputFocused = false
             return
         }
 
@@ -930,26 +939,49 @@ class PanelOverlayService : LifecycleService(), SavedStateRegistryOwner {
                             onDismissAppPicker = { state = state.copy(choosingSlot = null) },
                             onSelectApp = { app -> selectAppForSlot(app.packageName) },
                             onRatiosChanged = { state = state.copy(draftRatios = it) },
-                            choosingSlot = state.choosingSlot
+                            choosingSlot = state.choosingSlot,
+                            onInputFocusChanged = ::setPopupInputFocused
                         )
                         state.showPaymentPopup -> PaymentQrPopup(
                             initialConfig = PaymentQrConfig(
                                 bankCode = state.paymentBankCode,
                                 accountNumber = state.paymentAccountNumber
                             ),
-                            onUpdate = ::updatePaymentQrConfig
+                            onUpdate = ::updatePaymentQrConfig,
+                            onInputFocusChanged = ::setPopupInputFocused
                         )
                     }
                 }
             }
         }
         popupView = composeView
-        runCatching { windowManager.addView(composeView, popupLayoutParams(state.panelPosition)) }
+        runCatching {
+            windowManager.addView(
+                composeView,
+                popupLayoutParams(state.panelPosition, popupInputFocused)
+            )
+        }
             .onFailure {
                 popupView = null
+                popupInputFocused = false
                 state = state.copy(showLayoutPopup = false, showPaymentPopup = false)
                 Toast.makeText(this, getString(R.string.toast_popup_create_failed), Toast.LENGTH_SHORT).show()
             }
+    }
+
+    private fun setPopupInputFocused(focused: Boolean) {
+        if (popupInputFocused == focused) return
+        popupInputFocused = focused
+        val view = popupView ?: return
+        view.post {
+            if (popupView === view && popupInputFocused == focused) {
+                updateViewLayoutSafely(
+                    view,
+                    popupLayoutParams(state.panelPosition, focused),
+                    "popup input focus"
+                )
+            }
+        }
     }
 
     private fun updatePaymentQrConfig(config: PaymentQrConfig) {
@@ -994,6 +1026,21 @@ class PanelOverlayService : LifecycleService(), SavedStateRegistryOwner {
         )
     }
 
+    private fun scheduleBatteryFixAfterPanelDraw(view: View, expectedDisplayId: Int) {
+        startupBatteryFixRunnable?.let { handler.removeCallbacks(it) }
+        startupBatteryFixRunnable = Runnable {
+            startupBatteryFixRunnable = null
+            if (
+                panelView === view &&
+                currentDisplayId == expectedDisplayId &&
+                isPanelRunning &&
+                view.isShown
+            ) {
+                applyBatteryFixOnStartupIfNeeded()
+            }
+        }.also { handler.postDelayed(it, STARTUP_BATTERY_FIX_DELAY_MS) }
+    }
+
     private fun applyBatteryFixOnStartupIfNeeded() {
         if (!state.batteryFixEnabled) return
         val backend = batteryBackendOrNull() ?: return
@@ -1011,7 +1058,8 @@ class PanelOverlayService : LifecycleService(), SavedStateRegistryOwner {
             bounds.width(),
             bounds.height(),
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-            WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
+            WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
             PixelFormat.TRANSLUCENT
         ).apply {
             anchorToScreenEdge(bounds, position)
@@ -1041,13 +1089,18 @@ class PanelOverlayService : LifecycleService(), SavedStateRegistryOwner {
         ).toAndroidRect()
     }
 
-    private fun popupLayoutParams(position: PanelPosition): WindowManager.LayoutParams {
+    private fun popupLayoutParams(
+        position: PanelPosition,
+        inputFocused: Boolean = popupInputFocused
+    ): WindowManager.LayoutParams {
         val bounds = popupBounds(position)
+        val flags = WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+            if (inputFocused) 0 else WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
         return WindowManager.LayoutParams(
             bounds.width(),
             bounds.height(),
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-            WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
+            flags,
             PixelFormat.TRANSLUCENT
         ).apply {
             anchorToScreenEdge(bounds, position)
@@ -1202,6 +1255,7 @@ class PanelOverlayService : LifecycleService(), SavedStateRegistryOwner {
                         "Panel rendered on display id=$expectedDisplayId size=${view.width}x${view.height}"
                     )
                     setPanelRunning(true)
+                    scheduleBatteryFixAfterPanelDraw(view, expectedDisplayId)
                     scheduleSessionLayoutRestore(view, expectedDisplayId)
                 }
                 return true
@@ -1281,6 +1335,7 @@ class PanelOverlayService : LifecycleService(), SavedStateRegistryOwner {
         private const val MIN_AUTOSTART_SETTLE_ATTEMPTS = 1
         private const val AUTOSTART_INITIAL_DELAY_MS = 10_000L
         private const val PANEL_DRAW_TIMEOUT_MS = 5_000L
+        private const val STARTUP_BATTERY_FIX_DELAY_MS = 500L
         private const val SESSION_RESTORE_DELAY_MS = 1_000L
         private val OVERLAY_LAYOUT_REFRESH_DELAYS_MS =
             longArrayOf(250L, 500L, 1_000L, 2_000L, 4_000L, 6_000L)

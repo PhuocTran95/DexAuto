@@ -36,7 +36,8 @@ class LayoutBoundsCalculator {
         type: LayoutType,
         index: Int,
         workArea: Rect,
-        savedRatios: List<Float>
+        savedRatios: List<Float>,
+        internalGapPx: Int = 0
     ): Rect {
         val ratios = savedRatios.ifEmpty { defaultRatiosFor(type) }.map { it.coerceIn(0.15f, 0.85f) }
         fun ratio(position: Int, fallback: Float): Float = ratios.getOrNull(position) ?: fallback
@@ -45,7 +46,7 @@ class LayoutBoundsCalculator {
         val width = workArea.width()
         val height = workArea.height()
 
-        return when (type) {
+        val bounds = when (type) {
             LayoutType.Full -> Rect(left, top, left + width, top + height)
             LayoutType.SplitTwo -> {
                 val split = ratio(0, 0.5f)
@@ -126,6 +127,23 @@ class LayoutBoundsCalculator {
                 }
             }
         }
+        return bounds.withAppPadding(workArea, internalGapPx)
+    }
+
+    private fun Rect.withAppPadding(workArea: Rect, requestedGapPx: Int): Rect {
+        val gapPx = requestedGapPx.coerceAtLeast(0)
+        if (gapPx == 0) return this
+
+        val spacedLeft = left + gapPx
+        val spacedTop = top + gapPx
+        val spacedRight = right - gapPx
+        val spacedBottom = bottom - gapPx
+        return Rect(
+            spacedLeft.coerceAtMost(spacedRight - 1),
+            spacedTop.coerceAtMost(spacedBottom - 1),
+            spacedRight,
+            spacedBottom
+        )
     }
 
     private fun workAreaFromPanelBounds(safeDisplayBounds: Rect, appBounds: Rect, panelPosition: PanelPosition): Rect {

@@ -37,6 +37,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -60,6 +61,7 @@ import kotlinx.coroutines.withContext
 fun PaymentQrPopup(
     initialConfig: PaymentQrConfig,
     onUpdate: (PaymentQrConfig) -> Unit,
+    onInputFocusChanged: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -143,7 +145,9 @@ fun PaymentQrPopup(
                     singleLine = true,
                     label = { Text(stringResource(R.string.payment_qr_account_number)) },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .onFocusChanged { onInputFocusChanged(it.isFocused) }
                 )
 
                 Button(

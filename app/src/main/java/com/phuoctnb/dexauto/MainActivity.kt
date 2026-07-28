@@ -56,6 +56,7 @@ import androidx.core.net.toUri
 import com.phuoctnb.dexauto.system.PanelOverlayService
 import com.phuoctnb.dexauto.system.PanelOverlayBounds
 import com.phuoctnb.dexauto.system.DexDisplaySelector
+import com.phuoctnb.dexauto.system.SamsungDexStateProvider
 import com.phuoctnb.dexauto.data.DexAutoRepository
 import com.phuoctnb.dexauto.ui.theme.DexAutoTheme
 import com.phuoctnb.dexauto.ui.theme.PanelBackground
@@ -107,7 +108,9 @@ class MainActivity : ComponentActivity() {
             DexDisplaySelector.isDexDesktopDisplay(this, activityDisplayId)
         val returnedToPhoneAfterDex = lastResumedOnDexDisplay && !activityOnDexDisplay
         lastResumedOnDexDisplay = activityOnDexDisplay
-        if (returnedToPhoneAfterDex) {
+        val dexSessionConfirmedEnded = returnedToPhoneAfterDex &&
+            SamsungDexStateProvider.currentState(this)?.let { !it.enabled || !it.dualMode } == true
+        if (dexSessionConfirmedEnded) {
             finishAndRemoveTask()
             return
         }

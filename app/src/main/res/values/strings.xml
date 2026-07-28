@@ -26,6 +26,7 @@
     <string name="toast_overlay_security_failed">DexAuto chưa có quyền tạo overlay.</string>
     <string name="toast_popup_create_failed">Không thể tạo popup overlay.</string>
     <string name="toast_launch_app_failed">Không mở được %1$s</string>
+    <string name="toast_layout_reposition_backend_required">Không resize được task hiện có. Hãy kiểm tra quyền Root/Shizuku.</string>
     <string name="toast_battery_set_success">Đã set pin %1$d%%</string>
     <string name="toast_battery_set_failed">Không set được pin. Hãy chọn Root/Shizuku và cấp quyền tương ứng.</string>
     <string name="toast_root_requesting">Đang yêu cầu quyền Root…</string>
