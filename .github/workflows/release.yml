@@ -1,0 +1,73 @@
+name: Build signed release APK
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to attach the APK to
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build and upload signed APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Resolve release tag
+        id: release
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            tag="${{ inputs.tag }}"
+          else
+            tag="${{ github.event.release.tag_name }}"
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "version=${tag#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Check out release tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.release.outputs.tag }}
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Decode release keystore
+        run: |
+          echo "${{ secrets.ANDROID_RELEASE_KEYSTORE_BASE64 }}" | base64 --decode > "$RUNNER_TEMP/release.keystore"
+
+      - name: Build signed release APK
+        env:
+          RELEASE_KEYSTORE_FILE: ${{ runner.temp }}/release.keystore
+          RELEASE_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEYSTORE_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.ANDROID_RELEASE_KEY_ALIAS }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEY_PASSWORD }}
+        run: ./gradlew assembleRelease
+
+      - name: Prepare release asset
+        run: |
+          mkdir -p release-artifacts
+          signed_apk="$(find app/build/outputs/apk/release -maxdepth 1 -type f -name '*.apk' ! -name '*unsigned*' | head -n 1)"
+          if [ -z "$signed_apk" ]; then
+            echo "No signed release APK was produced. Check the Android signing secrets." >&2
+            exit 1
+          fi
+          cp "$signed_apk" "release-artifacts/DexAuto-v${{ steps.release.outputs.version }}.apk"
+
+      - name: Upload APK to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.release.outputs.tag }}
+          files: release-artifacts/*.apk

@@ -4,6 +4,17 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
+val releaseKeystoreFile = System.getenv("RELEASE_KEYSTORE_FILE")
+val releaseKeystorePassword = System.getenv("RELEASE_KEYSTORE_PASSWORD")
+val releaseKeyAlias = System.getenv("RELEASE_KEY_ALIAS")
+val releaseKeyPassword = System.getenv("RELEASE_KEY_PASSWORD")
+val hasReleaseSigning = listOf(
+    releaseKeystoreFile,
+    releaseKeystorePassword,
+    releaseKeyAlias,
+    releaseKeyPassword,
+).all { !it.isNullOrBlank() }
+
 android {
     namespace = "com.phuoctnb.dexauto"
     compileSdk {
@@ -19,10 +30,24 @@ android {
 
     }
 
+    signingConfigs {
+        if (hasReleaseSigning) {
+            create("release") {
+                storeFile = file(releaseKeystoreFile!!)
+                storePassword = releaseKeystorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
+            if (hasReleaseSigning) {
+                signingConfig = signingConfigs.getByName("release")
+            }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
