@@ -20,6 +20,7 @@ data class ShellCommandResult(
 class PrivilegedCommandRunner(private val context: Context) {
     private var rootAvailable: Boolean? = null
     @Volatile private var shizukuShellBinder: IBinder? = null
+    private val shizukuBindLock = Any()
 
     fun requestShizukuPermissionIfNeeded(requestCode: Int = SHIZUKU_PERMISSION_REQUEST_CODE): Boolean {
         if (!isShizukuBinderAlive()) return false
@@ -100,55 +101,81 @@ class PrivilegedCommandRunner(private val context: Context) {
 
     private fun runShizuku(command: String, timeoutMs: Long): ShellCommandResult {
         if (!hasShizukuPermission()) return ShellCommandResult(false, "")
-        val binder = shizukuShellBinder ?: bindShizukuShellService()
+        val binder = usableShizukuShellBinder() ?: bindShizukuShellService()
             ?: return ShellCommandResult(false, "")
+        transactShizukuCommand(binder, command, timeoutMs)?.let { return it }
+
+        clearShizukuState(binder)
+        val reboundBinder = bindShizukuShellService()
+            ?: return ShellCommandResult(false, "")
+        return transactShizukuCommand(reboundBinder, command, timeoutMs)
+            ?: ShellCommandResult(false, "")
+    }
+
+    private fun transactShizukuCommand(
+        binder: IBinder,
+        command: String,
+        timeoutMs: Long
+    ): ShellCommandResult? {
         val data = Parcel.obtain()
         val reply = Parcel.obtain()
         return runCatching {
             data.writeString(command)
             data.writeLong(timeoutMs)
-            binder.transact(ShizukuShellService.TRANSACTION_RUN_COMMAND, data, reply, 0)
+            if (!binder.transact(ShizukuShellService.TRANSACTION_RUN_COMMAND, data, reply, 0)) {
+                return@runCatching null
+            }
             reply.readException()
             ShellCommandResult(reply.readInt() == 1, reply.readString().orEmpty())
-        }.getOrElse {
-            clearShizukuState()
-            ShellCommandResult(false, "")
-        }.also {
+        }.getOrNull().also {
             data.recycle()
             reply.recycle()
         }
     }
 
     private fun bindShizukuShellService(): IBinder? {
-        val latch = CountDownLatch(1)
-        var receivedBinder: IBinder? = null
-        val args = Shizuku.UserServiceArgs(ComponentName(context.packageName, ShizukuShellService::class.java.name))
-            .daemon(false)
-            .processNameSuffix("shizuku_shell")
-            .tag("dex_auto_shell")
-            .version(2)
-            .debuggable(false)
-        val connection = object : ServiceConnection {
-            override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
-                receivedBinder = service
-                shizukuShellBinder = service
-                latch.countDown()
-            }
+        synchronized(shizukuBindLock) {
+            usableShizukuShellBinder()?.let { return it }
+            val latch = CountDownLatch(1)
+            var receivedBinder: IBinder? = null
+            val args = Shizuku.UserServiceArgs(
+                ComponentName(context.packageName, ShizukuShellService::class.java.name)
+            )
+                .daemon(false)
+                .processNameSuffix("shizuku_shell")
+                .tag("dex_auto_shell")
+                .version(2)
+                .debuggable(false)
+            val connection = object : ServiceConnection {
+                override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
+                    receivedBinder = service
+                    shizukuShellBinder = service
+                    latch.countDown()
+                }
 
-            override fun onServiceDisconnected(name: ComponentName?) {
-                shizukuShellBinder = null
+                override fun onServiceDisconnected(name: ComponentName?) {
+                    clearShizukuState(receivedBinder)
+                }
             }
+            runCatching { Shizuku.bindUserService(args, connection) }.getOrElse {
+                clearShizukuState()
+                return null
+            }
+            val connected = runCatching {
+                latch.await(SHIZUKU_BIND_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+            }.getOrDefault(false)
+            return if (connected) receivedBinder else usableShizukuShellBinder()
         }
-        runCatching { Shizuku.bindUserService(args, connection) }.getOrElse {
-            clearShizukuState()
-            return null
-        }
-        val connected = runCatching { latch.await(2_000L, TimeUnit.MILLISECONDS) }.getOrDefault(false)
-        return if (connected) receivedBinder else null
     }
 
-    private fun clearShizukuState() {
-        shizukuShellBinder = null
+    private fun usableShizukuShellBinder(): IBinder? {
+        return shizukuShellBinder?.takeIf { it.isBinderAlive }
+    }
+
+    private fun clearShizukuState(expectedBinder: IBinder? = null) {
+        if (expectedBinder == null || shizukuShellBinder === expectedBinder) {
+            shizukuShellBinder = null
+        }
     }
 
     private fun readProcess(process: Process, timeoutMs: Long): ShellCommandResult {
@@ -174,5 +201,6 @@ class PrivilegedCommandRunner(private val context: Context) {
         const val SHIZUKU_PERMISSION_REQUEST_CODE = 4100
         private const val DEFAULT_TIMEOUT_MS = 1_200L
         private const val ROOT_PERMISSION_TIMEOUT_MS = 15_000L
+        private const val SHIZUKU_BIND_TIMEOUT_MS = 5_000L
     }
 }

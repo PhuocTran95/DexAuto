@@ -37,6 +37,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -65,6 +66,7 @@ fun LayoutSetupPopup(
     onSelectApp: (LaunchableApp) -> Unit,
     onRatiosChanged: (List<Float>) -> Unit,
     choosingSlot: Int?,
+    onInputFocusChanged: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     if (!showPopup) return
@@ -107,6 +109,7 @@ fun LayoutSetupPopup(
                 },
                 searchValue = if (page == LayoutPopupPage.Apps) appSearch else null,
                 onSearchChanged = { appSearch = it },
+                onInputFocusChanged = onInputFocusChanged,
                 showBack = page != LayoutPopupPage.LayoutTypes,
                 onBack = {
                     when (page) {
@@ -171,6 +174,7 @@ private fun PopupHeader(
     title: String,
     searchValue: String?,
     onSearchChanged: (String) -> Unit,
+    onInputFocusChanged: (Boolean) -> Unit,
     showBack: Boolean,
     onBack: () -> Unit
 ) {
@@ -213,7 +217,9 @@ private fun PopupHeader(
                 onValueChange = onSearchChanged,
                 singleLine = true,
                 placeholder = { Text(stringResource(R.string.layout_popup_search_hint)) },
-                modifier = Modifier.weight(1f)
+                modifier = Modifier
+                    .weight(1f)
+                    .onFocusChanged { onInputFocusChanged(it.isFocused) }
             )
         } else {
             Box(Modifier.weight(1f))

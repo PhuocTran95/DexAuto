@@ -14,7 +14,11 @@ class BatteryController(
     fun applyLevel(requestedLevel: Int, backend: PrivilegedBackend) {
         val level = requestedLevel.coerceIn(1, 100)
         Thread {
-            val success = commandRunner.run("dumpsys battery set level $level", backend)
+            val success = commandRunner.run(
+                "dumpsys battery set level $level",
+                backend,
+                timeoutMs = BATTERY_COMMAND_TIMEOUT_MS
+            )
             Handler(Looper.getMainLooper()).post {
                 val message = if (success) {
                     context.getString(R.string.toast_battery_set_success, level)
@@ -24,5 +28,9 @@ class BatteryController(
                 Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
             }
         }.start()
+    }
+
+    private companion object {
+        const val BATTERY_COMMAND_TIMEOUT_MS = 5_000L
     }
 }
