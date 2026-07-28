@@ -73,3 +73,8 @@ DexAuto không yêu cầu license/activation để chạy. Người dùng có th
 Copyright 2026 DexAuto contributors
 
 Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE) for details.
+
+Ae thấy ok thì giúp mình 1 Star hay ủng hộ ít token để support ae nha <3
+
+<img width="150" height="190" alt="image" src="https://github.com/user-attachments/assets/1e659752-d876-4702-bf38-2665d1b09706" />
+
