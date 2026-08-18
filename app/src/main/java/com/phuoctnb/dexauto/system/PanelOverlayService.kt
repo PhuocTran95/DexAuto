@@ -180,6 +180,8 @@ class PanelOverlayService : LifecycleService(), SavedStateRegistryOwner {
 
     override fun onDestroy() {
         preserveLayoutRequestId++
+        privilegedBackendRequestId++
+        pendingShizukuBackendRequestId = null
         Shizuku.removeRequestPermissionResultListener(shizukuPermissionResultListener)
         handler.removeCallbacks(clockRunnable)
         panelTransitionRunnable?.let { handler.removeCallbacks(it) }
@@ -477,20 +479,40 @@ class PanelOverlayService : LifecycleService(), SavedStateRegistryOwner {
 
     private fun requestShizukuBackend() {
         val requestId = ++privilegedBackendRequestId
-        pendingShizukuBackendRequestId = null
+        pendingShizukuBackendRequestId = requestId
         if (commandRunner.hasBackend(PrivilegedBackend.Shizuku)) {
             savePrivilegedBackend(state.privilegedBackend.withShizukuEnabled(true))
             return
         }
-        val requested = commandRunner.requestShizukuPermissionIfNeeded()
-        if (requested) {
-            pendingShizukuBackendRequestId = requestId
-        } else if (commandRunner.hasBackend(PrivilegedBackend.Shizuku)) {
-            savePrivilegedBackend(state.privilegedBackend.withShizukuEnabled(true))
-        } else {
-            savePrivilegedBackend(state.privilegedBackend.withShizukuEnabled(false))
-            Toast.makeText(this, getString(R.string.toast_shizuku_permission_required), Toast.LENGTH_LONG).show()
-        }
+        Toast.makeText(this, getString(R.string.toast_shizuku_connecting), Toast.LENGTH_SHORT).show()
+        Thread {
+            val binderReady = commandRunner.waitForShizukuBinder()
+            handler.post {
+                if (
+                    requestId != privilegedBackendRequestId ||
+                    pendingShizukuBackendRequestId != requestId
+                ) {
+                    return@post
+                }
+                when {
+                    !binderReady -> failShizukuBackendRequest()
+                    commandRunner.hasBackend(PrivilegedBackend.Shizuku) -> {
+                        savePrivilegedBackend(state.privilegedBackend.withShizukuEnabled(true))
+                    }
+                    commandRunner.requestShizukuPermissionIfNeeded() -> Unit
+                    else -> failShizukuBackendRequest()
+                }
+            }
+        }.start()
+    }
+
+    private fun failShizukuBackendRequest() {
+        savePrivilegedBackend(state.privilegedBackend.withShizukuEnabled(false))
+        Toast.makeText(
+            this,
+            getString(R.string.toast_shizuku_permission_required),
+            Toast.LENGTH_LONG
+        ).show()
     }
 
     private fun handleShizukuPermissionResult(requestCode: Int, grantResult: Int) {
@@ -501,8 +523,7 @@ class PanelOverlayService : LifecycleService(), SavedStateRegistryOwner {
         if (grantResult == PackageManager.PERMISSION_GRANTED && commandRunner.hasBackend(PrivilegedBackend.Shizuku)) {
             savePrivilegedBackend(state.privilegedBackend.withShizukuEnabled(true))
         } else {
-            savePrivilegedBackend(state.privilegedBackend.withShizukuEnabled(false))
-            Toast.makeText(this, getString(R.string.toast_shizuku_permission_required), Toast.LENGTH_LONG).show()
+            failShizukuBackendRequest()
         }
     }
 
@@ -523,7 +544,7 @@ class PanelOverlayService : LifecycleService(), SavedStateRegistryOwner {
             state = state.copy(batteryFixEnabled = false)
             Toast.makeText(
                 this,
-                getString(R.string.toast_battery_set_failed),
+                getString(R.string.toast_battery_backend_not_selected),
                 Toast.LENGTH_LONG
             ).show()
             return
@@ -541,7 +562,7 @@ class PanelOverlayService : LifecycleService(), SavedStateRegistryOwner {
 
     private fun batteryBackendOrNull(): PrivilegedBackend? {
         val currentBackend = state.privilegedBackend
-        if (currentBackend != PrivilegedBackend.None && commandRunner.hasBackend(currentBackend)) {
+        if (currentBackend != PrivilegedBackend.None) {
             return currentBackend
         }
         if (commandRunner.hasBackend(PrivilegedBackend.Shizuku)) {

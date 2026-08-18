@@ -16,6 +16,7 @@
     <string name="permission_show_panel">Hiển thị panel</string>
     <string name="permission_hide_panel">Tắt panel</string>
     <string name="permission_overlay_required">Panel chỉ hiển thị sau khi quyền overlay đã bật.</string>
+    <string name="version_name">Phiên bản %1$s</string>
     <string name="author">Phuoc Tran - nguyenbaphuoctran@gmail.com</string>
     <string name="permission_ok">OK</string>
 
@@ -28,10 +29,18 @@
     <string name="toast_launch_app_failed">Không mở được %1$s</string>
     <string name="toast_layout_reposition_backend_required">Không resize được task hiện có. Hãy kiểm tra quyền Root/Shizuku.</string>
     <string name="toast_battery_set_success">Đã set pin %1$d%%</string>
-    <string name="toast_battery_set_failed">Không set được pin. Hãy chọn Root/Shizuku và cấp quyền tương ứng.</string>
+    <string name="toast_battery_backend_not_selected">Không thể Fix Pin: chưa chọn Root hoặc Shizuku.</string>
+    <string name="toast_battery_root_unavailable">Không thể Fix Pin: không kết nối được Root.</string>
+    <string name="toast_battery_shizuku_binder_unavailable">Không thể Fix Pin: Shizuku chưa chạy hoặc binder chưa kết nối.</string>
+    <string name="toast_battery_shizuku_permission_denied">Không thể Fix Pin: DexAuto chưa được cấp quyền Shizuku.</string>
+    <string name="toast_battery_shizuku_service_bind_failed">Không thể Fix Pin: bind Shizuku UserService thất bại.</string>
+    <string name="toast_battery_shizuku_transaction_failed">Không thể Fix Pin: kết nối Shizuku bị gián đoạn.</string>
+    <string name="toast_battery_command_timeout">Không thể Fix Pin: lệnh hệ thống bị timeout.</string>
+    <string name="toast_battery_command_failed">Không thể Fix Pin: lệnh hệ thống bị từ chối.</string>
     <string name="toast_root_requesting">Đang yêu cầu quyền Root…</string>
     <string name="toast_root_enabled">Đã bật Root cho DexAuto.</string>
     <string name="toast_root_denied">Root chưa được cấp trong Magisk, đã tắt toggle Root.</string>
+    <string name="toast_shizuku_connecting">Đang kết nối lại với Shizuku…</string>
     <string name="toast_shizuku_permission_required">Hãy cấp quyền Shizuku rồi bật lại toggle Shizuku.</string>
     <string name="toast_layout_incomplete">Vui lòng chọn đủ ứng dụng cho layout</string>
     <string name="toast_preserve_layout_backend_required">Không có quyền Root hoặc Shizuku. Tùy chọn giữ layout đã được tắt.</string>
