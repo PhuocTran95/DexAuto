@@ -14,8 +14,20 @@ import java.util.concurrent.atomic.AtomicReference
 
 data class ShellCommandResult(
     val success: Boolean,
-    val output: String
+    val output: String,
+    val failure: ShellCommandFailure? = null
 )
+
+enum class ShellCommandFailure {
+    BACKEND_NOT_SELECTED,
+    ROOT_PROCESS_UNAVAILABLE,
+    SHIZUKU_BINDER_UNAVAILABLE,
+    SHIZUKU_PERMISSION_DENIED,
+    SHIZUKU_USER_SERVICE_BIND_FAILED,
+    SHIZUKU_TRANSACTION_FAILED,
+    COMMAND_TIMEOUT,
+    COMMAND_FAILED
+}
 
 class PrivilegedCommandRunner(private val context: Context) {
     private var rootAvailable: Boolean? = null
@@ -64,7 +76,11 @@ class PrivilegedCommandRunner(private val context: Context) {
         timeoutMs: Long = DEFAULT_TIMEOUT_MS
     ): ShellCommandResult {
         return when (backend) {
-            PrivilegedBackend.None -> ShellCommandResult(false, "")
+            PrivilegedBackend.None -> ShellCommandResult(
+                success = false,
+                output = "",
+                failure = ShellCommandFailure.BACKEND_NOT_SELECTED
+            )
             PrivilegedBackend.Root -> runRoot(command, timeoutMs)
             PrivilegedBackend.Shizuku -> runShizuku(command, timeoutMs)
             PrivilegedBackend.RootAndShizuku -> {
@@ -90,26 +106,71 @@ class PrivilegedCommandRunner(private val context: Context) {
                 }
     }
 
+    fun waitForShizukuBinder(timeoutMs: Long = SHIZUKU_READY_TIMEOUT_MS): Boolean {
+        if (isShizukuBinderAlive()) return true
+
+        val latch = CountDownLatch(1)
+        val listener = Shizuku.OnBinderReceivedListener { latch.countDown() }
+        Shizuku.addBinderReceivedListenerSticky(listener)
+        return try {
+            latch.await(timeoutMs, TimeUnit.MILLISECONDS) && isShizukuBinderAlive()
+        } catch (_: InterruptedException) {
+            Thread.currentThread().interrupt()
+            false
+        } finally {
+            Shizuku.removeBinderReceivedListener(listener)
+        }
+    }
+
     private fun runRoot(command: String, timeoutMs: Long): ShellCommandResult {
         val process = runCatching {
             ProcessBuilder("su", "-c", command)
                 .redirectErrorStream(true)
                 .start()
-        }.getOrNull() ?: return ShellCommandResult(false, "")
+        }.getOrNull() ?: return ShellCommandResult(
+            success = false,
+            output = "",
+            failure = ShellCommandFailure.ROOT_PROCESS_UNAVAILABLE
+        )
         return readProcess(process, timeoutMs)
     }
 
     private fun runShizuku(command: String, timeoutMs: Long): ShellCommandResult {
-        if (!hasShizukuPermission()) return ShellCommandResult(false, "")
+        if (!waitForShizukuBinder()) {
+            return ShellCommandResult(
+                success = false,
+                output = "",
+                failure = ShellCommandFailure.SHIZUKU_BINDER_UNAVAILABLE
+            )
+        }
+        if (!hasShizukuPermission()) {
+            return ShellCommandResult(
+                success = false,
+                output = "",
+                failure = ShellCommandFailure.SHIZUKU_PERMISSION_DENIED
+            )
+        }
         val binder = usableShizukuShellBinder() ?: bindShizukuShellService()
-            ?: return ShellCommandResult(false, "")
+            ?: return ShellCommandResult(
+                success = false,
+                output = "",
+                failure = ShellCommandFailure.SHIZUKU_USER_SERVICE_BIND_FAILED
+            )
         transactShizukuCommand(binder, command, timeoutMs)?.let { return it }
 
         clearShizukuState(binder)
         val reboundBinder = bindShizukuShellService()
-            ?: return ShellCommandResult(false, "")
+            ?: return ShellCommandResult(
+                success = false,
+                output = "",
+                failure = ShellCommandFailure.SHIZUKU_USER_SERVICE_BIND_FAILED
+            )
         return transactShizukuCommand(reboundBinder, command, timeoutMs)
-            ?: ShellCommandResult(false, "")
+            ?: ShellCommandResult(
+                success = false,
+                output = "",
+                failure = ShellCommandFailure.SHIZUKU_TRANSACTION_FAILED
+            )
     }
 
     private fun transactShizukuCommand(
@@ -126,7 +187,12 @@ class PrivilegedCommandRunner(private val context: Context) {
                 return@runCatching null
             }
             reply.readException()
-            ShellCommandResult(reply.readInt() == 1, reply.readString().orEmpty())
+            val success = reply.readInt() == 1
+            ShellCommandResult(
+                success = success,
+                output = reply.readString().orEmpty(),
+                failure = if (success) null else ShellCommandFailure.COMMAND_FAILED
+            )
         }.getOrNull().also {
             data.recycle()
             reply.recycle()
@@ -187,10 +253,19 @@ class PrivilegedCommandRunner(private val context: Context) {
         if (!finished) {
             process.destroyForcibly()
             reader.join(500L)
-            return ShellCommandResult(false, output.get())
+            return ShellCommandResult(
+                success = false,
+                output = output.get(),
+                failure = ShellCommandFailure.COMMAND_TIMEOUT
+            )
         }
         reader.join(500L)
-        return ShellCommandResult(process.exitValue() == 0, output.get())
+        val success = process.exitValue() == 0
+        return ShellCommandResult(
+            success = success,
+            output = output.get(),
+            failure = if (success) null else ShellCommandFailure.COMMAND_FAILED
+        )
     }
 
     private fun isShizukuBinderAlive(): Boolean {
@@ -201,6 +276,7 @@ class PrivilegedCommandRunner(private val context: Context) {
         const val SHIZUKU_PERMISSION_REQUEST_CODE = 4100
         private const val DEFAULT_TIMEOUT_MS = 1_200L
         private const val ROOT_PERMISSION_TIMEOUT_MS = 15_000L
+        private const val SHIZUKU_READY_TIMEOUT_MS = 8_000L
         private const val SHIZUKU_BIND_TIMEOUT_MS = 5_000L
     }
 }

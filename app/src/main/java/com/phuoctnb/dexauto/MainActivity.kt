@@ -43,6 +43,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -191,6 +192,14 @@ private fun PermissionGate(
     onTogglePanel: () -> Unit
 ) {
     val context = LocalContext.current
+    val versionName = remember(context) {
+        runCatching {
+            context.packageManager
+                .getPackageInfo(context.packageName, 0)
+                .versionName
+                .orEmpty()
+        }.getOrDefault("")
+    }
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { }
@@ -313,10 +322,16 @@ private fun PermissionGate(
                     )
                 }
 
-                Text(
-                    text = stringResource(R.string.author),
-                    style = MaterialTheme.typography.bodyMedium
-                )
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(
+                        text = stringResource(R.string.version_name, versionName),
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    Text(
+                        text = stringResource(R.string.author),
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
             }
         }
     }
