@@ -58,6 +58,20 @@
                 android:value="persistent_overlay_panel_for_dex_layout_control" />
         </service>
 
+        <service
+            android:name=".system.DexAutoAccessibilityService"
+            android:exported="true"
+            android:label="@string/accessibility_service_label"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/accessibility_service_config" />
+        </service>
+
         <receiver
             android:name=".system.DexModeReceiver"
             android:enabled="true"

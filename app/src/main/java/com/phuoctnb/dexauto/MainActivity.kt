@@ -56,6 +56,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
 import com.phuoctnb.dexauto.system.PanelOverlayService
 import com.phuoctnb.dexauto.system.PanelOverlayBounds
+import com.phuoctnb.dexauto.system.DexAutoAccessibilityService
 import com.phuoctnb.dexauto.system.DexDisplaySelector
 import com.phuoctnb.dexauto.system.SamsungDexStateProvider
 import com.phuoctnb.dexauto.data.DexAutoRepository
@@ -208,6 +209,7 @@ private fun PermissionGate(
         ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
     val ignoringBatteryOptimizations = context.getSystemService(PowerManager::class.java)
         ?.isIgnoringBatteryOptimizations(context.packageName) == true
+    val accessibilityGranted = DexAutoAccessibilityService.isEnabled(context)
     val requiredReady = overlayGranted
 
     Box(
@@ -292,6 +294,22 @@ private fun PermissionGate(
                                 "package:${context.packageName}".toUri()
                             )
                             )
+                        }
+                    }
+                )
+
+                PermissionRow(
+                    title = stringResource(R.string.permission_accessibility_title),
+                    description = if (accessibilityGranted) {
+                        stringResource(R.string.permission_accessibility_granted)
+                    } else {
+                        stringResource(R.string.permission_accessibility_denied)
+                    },
+                    granted = accessibilityGranted,
+                    actionLabel = stringResource(R.string.permission_open_settings),
+                    onAction = {
+                        runCatching {
+                            context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
                         }
                     }
                 )
