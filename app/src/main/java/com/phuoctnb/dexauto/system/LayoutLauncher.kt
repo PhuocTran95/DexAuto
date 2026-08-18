@@ -5,6 +5,8 @@ import android.app.ActivityManager
 import android.content.Context
 import android.content.Intent
 import android.graphics.Rect
+import android.os.Build
+import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -50,7 +52,7 @@ class LayoutLauncher(
 
         val plannedApps = layout.packages.mapIndexedNotNull { index, packageName ->
             val intent = context.packageManager.getLaunchIntentForPackage(packageName)?.apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_LAUNCH_ADJACENT)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             } ?: return@mapIndexedNotNull null
             val bounds = boundsCalculator.boundsFor(
                 layout.type,
@@ -89,8 +91,7 @@ class LayoutLauncher(
             val intent = context.packageManager.getLaunchIntentForPackage(app.packageName)?.apply {
                 addFlags(
                     Intent.FLAG_ACTIVITY_NEW_TASK or
-                        Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or
-                        Intent.FLAG_ACTIVITY_LAUNCH_ADJACENT
+                        Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
                 )
             } ?: return@forEachIndexed
             val options = ActivityOptions.makeBasic().apply {
@@ -98,7 +99,7 @@ class LayoutLauncher(
                 setLaunchDisplayId(targetDisplayId)
             }
             Handler(Looper.getMainLooper()).postDelayed({
-                runCatching { launchContext.startActivity(intent, options.toBundle()) }
+                runCatching { launchContext.startActivity(intent, options.toDexLaunchBundle()) }
                     .onFailure {
                         Toast.makeText(
                             context,
@@ -186,7 +187,7 @@ class LayoutLauncher(
                         is LaunchAction.Start -> runCatching {
                             launchContext.startActivity(
                                 action.plannedApp.intent,
-                                action.plannedApp.options.toBundle()
+                                action.plannedApp.options.toDexLaunchBundle()
                             )
                             packagesLaunchedThisSession +=
                                 action.plannedApp.sessionApp.packageName
@@ -208,7 +209,142 @@ class LayoutLauncher(
                     }
                 }, index * LAUNCH_DELAY_MS)
             }
+            scheduleNewTaskCorrection(
+                plannedApps = launchActions.mapNotNull { action ->
+                    (action as? LaunchAction.Start)?.plannedApp
+                },
+                backend = backend,
+                targetDisplayId = targetDisplayId,
+                requestId = requestId,
+                launchActionCount = launchActions.size
+            )
         }.start()
+    }
+
+    /**
+     * One UI 8 cascades a newly created desktop task after accepting its launch bounds. Once the
+     * task exists, the privileged task-resize path is stable, so correct only apps started by this
+     * request instead of making the user tap the same layout a second time.
+     */
+    private fun scheduleNewTaskCorrection(
+        plannedApps: List<PlannedAppLaunch>,
+        backend: PrivilegedBackend,
+        targetDisplayId: Int?,
+        requestId: Int,
+        launchActionCount: Int
+    ) {
+        if (
+            Build.VERSION.SDK_INT < Build.VERSION_CODES.BAKLAVA ||
+            targetDisplayId == null ||
+            plannedApps.isEmpty()
+        ) {
+            return
+        }
+        val initialLaunchDuration = (launchActionCount - 1).coerceAtLeast(0) * LAUNCH_DELAY_MS
+        mainHandler.postDelayed({
+            if (launchRequestId.get() != requestId) return@postDelayed
+            if (backend == PrivilegedBackend.None) {
+                if (!correctWithAccessibility(plannedApps, targetDisplayId, requestId)) {
+                    showAccessibilityUnavailable(requestId)
+                }
+                return@postDelayed
+            }
+            Thread {
+                if (launchRequestId.get() != requestId) return@Thread
+                val taskDump = commandRunner.runForOutput(
+                    DUMP_ACTIVITIES_COMMAND,
+                    backend,
+                    timeoutMs = TASK_DUMP_TIMEOUT_MS
+                )
+                if (!taskDump.success) {
+                    if (!correctWithAccessibility(plannedApps, targetDisplayId, requestId)) {
+                        showRepositionFailure(requestId)
+                    }
+                    return@Thread
+                }
+                val taskState = taskLocator.parse(taskDump.output, targetDisplayId)
+                var correctionFailed = false
+                plannedApps.forEach { plannedApp ->
+                    if (launchRequestId.get() != requestId) return@Thread
+                    val taskId = taskState.taskIdsByPackage[plannedApp.sessionApp.packageName]
+                    if (taskId == null) {
+                        correctionFailed = true
+                        return@forEach
+                    }
+                    val bounds = plannedApp.sessionApp.bounds
+                    val resized = commandRunner.run(
+                        "am task resize $taskId ${bounds.left} ${bounds.top} " +
+                            "${bounds.right} ${bounds.bottom}",
+                        backend,
+                        timeoutMs = TASK_RESIZE_TIMEOUT_MS
+                    )
+                    if (!resized) correctionFailed = true
+                }
+                if (
+                    correctionFailed &&
+                    !correctWithAccessibility(plannedApps, targetDisplayId, requestId)
+                ) {
+                    showRepositionFailure(requestId)
+                }
+            }.start()
+        }, initialLaunchDuration + NEW_TASK_CORRECTION_DELAY_MS)
+    }
+
+    private fun correctWithAccessibility(
+        plannedApps: List<PlannedAppLaunch>,
+        targetDisplayId: Int,
+        requestId: Int
+    ): Boolean {
+        val targets = plannedApps.map { plannedApp ->
+            DexAutoAccessibilityService.WindowTarget(
+                packageName = plannedApp.sessionApp.packageName,
+                bounds = Rect(plannedApp.sessionApp.bounds)
+            )
+        }
+        val requested = DexAutoAccessibilityService.requestReposition(
+            displayId = targetDisplayId,
+            targets = targets
+        ) { success ->
+            if (!success) showAccessibilityFailure(requestId)
+        }
+        return requested
+    }
+
+    private fun showAccessibilityUnavailable(requestId: Int) {
+        mainHandler.post {
+            if (launchRequestId.get() == requestId) {
+                val message = if (DexAutoAccessibilityService.isEnabled(context)) {
+                    R.string.toast_layout_accessibility_failed
+                } else {
+                    R.string.toast_layout_accessibility_required
+                }
+                Toast.makeText(context, context.getString(message), Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    private fun showAccessibilityFailure(requestId: Int) {
+        mainHandler.post {
+            if (launchRequestId.get() == requestId) {
+                Toast.makeText(
+                    context,
+                    context.getString(R.string.toast_layout_accessibility_failed),
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
+    }
+
+    private fun showRepositionFailure(requestId: Int) {
+        mainHandler.post {
+            if (launchRequestId.get() == requestId) {
+                Toast.makeText(
+                    context,
+                    context.getString(R.string.toast_layout_reposition_backend_required),
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
     }
 
     private fun calculateWorkArea(context: Context, panelPosition: PanelPosition): Rect {
@@ -219,6 +355,14 @@ class LayoutLauncher(
             panelBounds = PanelOverlayBounds.bounds,
             panelPosition = panelPosition
         )
+    }
+
+    private fun ActivityOptions.toDexLaunchBundle(): Bundle {
+        val bundle = Bundle(toBundle())
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.BAKLAVA) {
+            bundle.putInt(KEY_LAUNCH_WINDOWING_MODE, WINDOWING_MODE_FREEFORM)
+        }
+        return bundle
     }
 
     fun currentWorkArea(displayId: Int, panelPosition: PanelPosition): Rect {
@@ -249,8 +393,11 @@ class LayoutLauncher(
     private companion object {
         const val TAG = "LayoutLauncher"
         const val INTERNAL_APP_GAP_DP = 10f
+        const val KEY_LAUNCH_WINDOWING_MODE = "android.activity.windowingMode"
+        const val WINDOWING_MODE_FREEFORM = 5
         const val DUMP_ACTIVITIES_COMMAND = "dumpsys activity activities"
         const val LAUNCH_DELAY_MS = 250L
+        const val NEW_TASK_CORRECTION_DELAY_MS = 2_000L
         const val RESTORE_DELAY_MS = 350L
         const val TASK_DUMP_TIMEOUT_MS = 8_000L
         const val TASK_RESIZE_TIMEOUT_MS = 2_000L

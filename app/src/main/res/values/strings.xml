@@ -13,6 +13,11 @@
     <string name="permission_battery_title">Không tối ưu pin</string>
     <string name="permission_battery_granted">Đã bật. Panel ít bị hệ thống dừng nền hơn.</string>
     <string name="permission_battery_denied">Khuyến nghị nếu muốn panel chạy lâu trong DeX.</string>
+    <string name="permission_accessibility_title">Căn vị trí cửa sổ (Accessibility)</string>
+    <string name="permission_accessibility_granted">Đã bật. DexAuto có thể kéo cửa sổ về đúng vị trí khi One UI 8 tự thay đổi vị trí lúc mở lần đầu.</string>
+    <string name="permission_accessibility_denied">Khuyến nghị trên One UI 8 nếu không dùng Root/Shizuku. Nếu không cấp quyền, cửa sổ có thể đúng kích thước nhưng sai vị trí và DexAuto không thể tự sửa.</string>
+    <string name="accessibility_service_label">DexAuto - Căn vị trí cửa sổ</string>
+    <string name="accessibility_service_description">Cho phép DexAuto kéo thanh tiêu đề của cửa sổ trên DeX về đúng vị trí layout. DexAuto chỉ dùng tên ứng dụng và vị trí cửa sổ, không đăng ký lọc phím.</string>
     <string name="permission_show_panel">Hiển thị panel</string>
     <string name="permission_hide_panel">Tắt panel</string>
     <string name="permission_overlay_required">Panel chỉ hiển thị sau khi quyền overlay đã bật.</string>
@@ -28,6 +33,8 @@
     <string name="toast_popup_create_failed">Không thể tạo popup overlay.</string>
     <string name="toast_launch_app_failed">Không mở được %1$s</string>
     <string name="toast_layout_reposition_backend_required">Không resize được task hiện có. Hãy kiểm tra quyền Root/Shizuku.</string>
+    <string name="toast_layout_accessibility_required">One UI 8 đã thay đổi vị trí cửa sổ. Hãy cấp Accessibility cho DexAuto hoặc bật Root/Shizuku để tự căn lại.</string>
+    <string name="toast_layout_accessibility_failed">Accessibility đã bật nhưng không kéo được cửa sổ về đúng vị trí. Hãy kiểm tra lại quyền hoặc dùng Root/Shizuku.</string>
     <string name="toast_battery_set_success">Đã set pin %1$d%%</string>
     <string name="toast_battery_backend_not_selected">Không thể Fix Pin: chưa chọn Root hoặc Shizuku.</string>
     <string name="toast_battery_root_unavailable">Không thể Fix Pin: không kết nối được Root.</string>

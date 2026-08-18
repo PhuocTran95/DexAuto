@@ -8,6 +8,7 @@ class DexTaskLocator {
     fun parse(output: String, targetDisplayId: Int): DexTaskState {
         var currentDisplayId: Int? = null
         var inTaskListing = false
+        var currentStandardTaskId: Int? = null
         val taskIdsByPackage = linkedMapOf<String, Int>()
 
         output.lineSequence().forEach { rawLine ->
@@ -18,17 +19,26 @@ class DexTaskLocator {
             }
             if (TASK_LISTING_END.matches(line)) {
                 inTaskListing = false
+                currentStandardTaskId = null
             }
             if (currentDisplayId != targetDisplayId || !inTaskListing) return@forEach
 
-            if (!TASK_HEADER.containsMatchIn(line)) return@forEach
+            if (TASK_HEADER.containsMatchIn(line)) {
+                val taskId = TASK_ID.find(line)?.groupValues?.getOrNull(1)?.toIntOrNull()
+                val taskType = TASK_TYPE.find(line)?.groupValues?.getOrNull(1)
+                currentStandardTaskId = taskId?.takeIf {
+                    taskType.equals("standard", ignoreCase = true)
+                }
+                currentStandardTaskId?.let { standardTaskId ->
+                    AFFINITY_PACKAGE.find(line)?.groupValues?.getOrNull(1)?.let { affinity ->
+                        taskIdsByPackage.putIfAbsent(affinity, standardTaskId)
+                    }
+                }
+                return@forEach
+            }
 
-            val taskId = TASK_ID.find(line)?.groupValues?.getOrNull(1)?.toIntOrNull()
-                ?: return@forEach
-            val taskType = TASK_TYPE.find(line)?.groupValues?.getOrNull(1)
-            if (!taskType.equals("standard", ignoreCase = true)) return@forEach
-
-            val packageName = AFFINITY_PACKAGE.find(line)?.groupValues?.getOrNull(1)
+            val taskId = currentStandardTaskId ?: return@forEach
+            val packageName = PACKAGE_NAME.find(line)?.groupValues?.getOrNull(1)
                 ?: return@forEach
             taskIdsByPackage.putIfAbsent(packageName, taskId)
         }
@@ -47,6 +57,9 @@ class DexTaskLocator {
         val TASK_TYPE = Regex("""\btype=([A-Za-z-]+)""")
         val AFFINITY_PACKAGE = Regex(
             """\bA=(?:\d+:)?([A-Za-z_][A-Za-z0-9._]*)"""
+        )
+        val PACKAGE_NAME = Regex(
+            """packageName=([A-Za-z_][A-Za-z0-9._]*)"""
         )
     }
 }
